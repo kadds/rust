@@ -24,6 +24,10 @@ cfg_select! {
         mod motor;
         pub use self::motor::*;
     }
+    target_os = "naos" => {
+        pub mod naos;
+        pub use self::naos::*;
+    }
     target_os = "trusty" => {
         mod trusty;
         pub use self::trusty::*;

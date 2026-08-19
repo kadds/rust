@@ -14,6 +14,10 @@ cfg_select! {
         mod futex;
         pub use futex::Parker;
     }
+    target_os = "naos" => {
+        mod naos;
+        pub use naos::Parker;
+    }
     any(
         target_os = "netbsd",
         all(target_vendor = "fortanix", target_env = "sgx"),

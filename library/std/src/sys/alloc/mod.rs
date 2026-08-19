@@ -83,8 +83,15 @@ cfg_select! {
     target_os = "hermit" => {
         mod hermit;
     }
+    target_os = "naos" => {
+        mod naos;
+    }
     target_os = "motor" => {
         mod motor;
+    }
+    target_os = "naos" => {
+        mod naos;
+        use naos as imp;
     }
     all(target_vendor = "fortanix", target_env = "sgx") => {
         mod sgx;

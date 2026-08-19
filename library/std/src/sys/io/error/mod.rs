@@ -19,6 +19,10 @@ cfg_select! {
         mod teeos;
         pub use teeos::*;
     }
+    target_os = "naos" => {
+        mod naos;
+        pub use naos::*;
+    }
     target_os = "uefi" => {
         mod uefi;
         pub use uefi::*;

@@ -157,6 +157,8 @@ pub mod l4re;
 pub mod macos;
 #[cfg(target_os = "motor")]
 pub mod motor;
+#[cfg(target_os = "naos")]
+pub mod naos;
 #[cfg(target_os = "netbsd")]
 pub mod netbsd;
 #[cfg(target_os = "nto")]

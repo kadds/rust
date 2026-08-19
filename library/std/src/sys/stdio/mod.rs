@@ -45,6 +45,10 @@ cfg_select! {
         mod zkvm;
         pub use zkvm::*;
     }
+    target_os = "naos" => {
+        mod unsupported;
+        pub use unsupported::*;
+    }
     _ => {
         mod unsupported;
         pub use unsupported::*;

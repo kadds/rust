@@ -40,6 +40,10 @@ cfg_select! {
         mod windows_prefix;
         pub use cygwin::*;
     }
+    target_os = "naos" => {
+        mod naos;
+        pub use naos::*;
+    }
     _ => {
         mod unix;
         pub use unix::*;

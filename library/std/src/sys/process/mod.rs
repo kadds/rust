@@ -15,6 +15,11 @@ cfg_select! {
         mod motor;
         use motor as imp;
     }
+    target_os = "naos" => {
+        mod unsupported;
+        mod naos;
+        use naos as imp;
+    }
     _ => {
         mod unsupported;
         use unsupported as imp;

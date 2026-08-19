@@ -29,6 +29,10 @@ cfg_select! {
         mod uefi;
         pub use uefi::*;
     }
+    target_os = "naos" => {
+        mod unsupported;
+        pub use unsupported::*;
+    }
     _ => {
         mod unsupported;
         pub use unsupported::*;

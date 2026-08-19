@@ -139,6 +139,14 @@ pub(crate) fn thread_cleanup() {
 pub(crate) fn cleanup() {
     static CLEANUP: Once = Once::new();
     CLEANUP.call_once(|| unsafe {
+        #[cfg(target_os = "naos")]
+        {
+            // NaOS has no libc/loader TLS destructor hook. Run the Rust
+            // registry while the main thread's FS base and TLS mapping are
+            // still valid, before the remaining runtime cleanup.
+            crate::sys::thread_local::destructors::run();
+            crate::rt::thread_cleanup();
+        }
         // Flush stdout and disable buffering.
         crate::io::cleanup();
         // SAFETY: Only called once during runtime cleanup.

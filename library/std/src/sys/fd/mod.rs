@@ -19,5 +19,6 @@ cfg_select! {
         mod sgx;
         pub use sgx::*;
     }
+    target_os = "naos" => {}
     _ => {}
 }

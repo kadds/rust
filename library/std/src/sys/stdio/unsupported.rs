@@ -13,17 +13,17 @@ impl Stdin {
 impl io::Read for Stdin {
     #[inline]
     fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-        Ok(0)
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
     fn read_buf(&mut self, _cursor: BorrowedCursor<'_>) -> io::Result<()> {
-        Ok(())
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
     fn read_vectored(&mut self, _bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
-        Ok(0)
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
@@ -35,22 +35,24 @@ impl io::Read for Stdin {
 
     #[inline]
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
-        if !buf.is_empty() { Err(io::Error::READ_EXACT_EOF) } else { Ok(()) }
+        let _ = buf;
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
     fn read_buf_exact(&mut self, cursor: BorrowedCursor<'_>) -> io::Result<()> {
-        if cursor.capacity() != 0 { Err(io::Error::READ_EXACT_EOF) } else { Ok(()) }
+        let _ = cursor;
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
     fn read_to_end(&mut self, _buf: &mut Vec<u8>) -> io::Result<usize> {
-        Ok(0)
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
     fn read_to_string(&mut self, _buf: &mut String) -> io::Result<usize> {
-        Ok(0)
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 }
 
@@ -63,13 +65,14 @@ impl Stdout {
 impl io::Write for Stdout {
     #[inline]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        Ok(buf.len())
+        let _ = buf;
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
     fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
-        let total_len = bufs.iter().map(|b| b.len()).sum();
-        Ok(total_len)
+        let _ = bufs;
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
@@ -79,19 +82,19 @@ impl io::Write for Stdout {
 
     #[inline]
     fn write_all(&mut self, _buf: &[u8]) -> io::Result<()> {
-        Ok(())
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     #[inline]
     fn write_all_vectored(&mut self, _bufs: &mut [IoSlice<'_>]) -> io::Result<()> {
-        Ok(())
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 
     // Keep the default write_fmt so the `fmt::Arguments` are still evaluated.
 
     #[inline]
     fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        Err(io::Error::UNSUPPORTED_PLATFORM)
     }
 }
 

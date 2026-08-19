@@ -8,6 +8,10 @@ cfg_select! {
         mod windows;
         pub use windows::hostname;
     }
+    target_os = "naos" => {
+        mod unsupported;
+        pub use unsupported::hostname;
+    }
     _ => {
         mod unsupported;
         pub use unsupported::hostname;
