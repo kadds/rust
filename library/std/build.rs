@@ -49,6 +49,7 @@ fn main() {
         || target_os == "aix"
         || target_os == "nto"
         || target_os == "xous"
+        || target_os == "naos"
         || target_os == "hurd"
         || target_os == "uefi"
         || target_os == "teeos"

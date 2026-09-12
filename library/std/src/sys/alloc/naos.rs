@@ -12,6 +12,7 @@ unsafe extern "C" {
     ) -> *mut u8;
 }
 
+#[stable(feature = "alloc_system_type", since = "1.28.0")]
 unsafe impl GlobalAlloc for System {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         unsafe { __naos_runtime_alloc(layout.size(), layout.align()) }

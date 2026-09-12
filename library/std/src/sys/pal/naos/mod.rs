@@ -12,6 +12,9 @@ pub mod unsupported {
     }
 }
 
+pub mod errors;
+pub mod protocol;
+
 pub mod futex;
 
 pub use unsupported::{unsupported, unsupported_err};

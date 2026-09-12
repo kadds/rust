@@ -1,69 +1,59 @@
-use crate::io::{ErrorKind, RawOsError};
+//! NaOS `io::Error` plumbing. Mapping tables live in
+//! `sys::pal::naos::errors` (generated from the NaoIDL manifest, the single
+//! source of truth per USERSPACE_FILESYSTEM_PRD §5.3 item 7); this module
+//! adapts them to std types and preserves raw codes in `raw_os_error`.
+//!
+//! Raw-code convention (see `sys::pal::naos::errors`):
+//! - positive code = NaOS transport status (`NA_STATUS_*`);
+//! - negative code = negated POSIX errno from a typed protocol failure.
 
-const STATUS_INVALID_HANDLE: u32 = 1;
-const STATUS_WRONG_BINDING: u32 = 2;
-const STATUS_WRONG_SCOPE: u32 = 3;
-const STATUS_ACCESS_DENIED: u32 = 4;
-const STATUS_INVALID_ARGUMENT: u32 = 5;
-const STATUS_INVALID_MESSAGE: u32 = 6;
-const STATUS_BUFFER_TOO_SMALL: u32 = 7;
-const STATUS_WOULD_BLOCK: u32 = 8;
-const STATUS_WAIT_TIMED_OUT: u32 = 9;
-const STATUS_RESOURCE_EXHAUSTED: u32 = 10;
-const STATUS_FAULT: u32 = 11;
-const STATUS_OBJECT_REVOKED: u32 = 12;
-const STATUS_PEER_CLOSED: u32 = 13;
-const STATUS_ALREADY_CONSUMED: u32 = 14;
-const STATUS_NOT_SUPPORTED: u32 = 15;
-const STATUS_IO_ERROR: u32 = 16;
+use crate::io::{ErrorKind, RawOsError};
+use crate::sys::pal::naos::errors;
 
 pub fn errno() -> RawOsError {
     0
 }
 
-pub fn is_interrupted(_: RawOsError) -> bool {
-    false
+pub fn is_interrupted(code: RawOsError) -> bool {
+    code < 0 && -(code as i64) == errors::errno::EINTR as i64
+}
+
+fn kind_from_shim(kind: errors::Kind) -> ErrorKind {
+    match kind {
+        errors::Kind::Uncategorized => ErrorKind::Uncategorized,
+        errors::Kind::NotFound => ErrorKind::NotFound,
+        errors::Kind::PermissionDenied => ErrorKind::PermissionDenied,
+        errors::Kind::Interrupted => ErrorKind::Interrupted,
+        errors::Kind::Other => ErrorKind::Other,
+        errors::Kind::ArgumentListTooLong => ErrorKind::ArgumentListTooLong,
+        errors::Kind::WouldBlock => ErrorKind::WouldBlock,
+        errors::Kind::OutOfMemory => ErrorKind::OutOfMemory,
+        errors::Kind::ResourceBusy => ErrorKind::ResourceBusy,
+        errors::Kind::AlreadyExists => ErrorKind::AlreadyExists,
+        errors::Kind::CrossesDevices => ErrorKind::CrossesDevices,
+        errors::Kind::NotADirectory => ErrorKind::NotADirectory,
+        errors::Kind::IsADirectory => ErrorKind::IsADirectory,
+        errors::Kind::InvalidInput => ErrorKind::InvalidInput,
+        errors::Kind::FileTooLarge => ErrorKind::FileTooLarge,
+        errors::Kind::StorageFull => ErrorKind::StorageFull,
+        errors::Kind::NotSeekable => ErrorKind::NotSeekable,
+        errors::Kind::ReadOnlyFilesystem => ErrorKind::ReadOnlyFilesystem,
+        errors::Kind::TooManyLinks => ErrorKind::TooManyLinks,
+        errors::Kind::BrokenPipe => ErrorKind::BrokenPipe,
+        errors::Kind::Deadlock => ErrorKind::Deadlock,
+        errors::Kind::InvalidFilename => ErrorKind::InvalidFilename,
+        errors::Kind::Unsupported => ErrorKind::Unsupported,
+        errors::Kind::DirectoryNotEmpty => ErrorKind::DirectoryNotEmpty,
+        errors::Kind::FilesystemLoop => ErrorKind::FilesystemLoop,
+        errors::Kind::InvalidData => ErrorKind::InvalidData,
+        errors::Kind::TimedOut => ErrorKind::TimedOut,
+    }
 }
 
 pub fn decode_error_kind(code: RawOsError) -> ErrorKind {
-    match code as u32 {
-        STATUS_INVALID_HANDLE | STATUS_INVALID_ARGUMENT | STATUS_ALREADY_CONSUMED => {
-            ErrorKind::InvalidInput
-        }
-        STATUS_WRONG_BINDING | STATUS_WRONG_SCOPE | STATUS_ACCESS_DENIED => {
-            ErrorKind::PermissionDenied
-        }
-        STATUS_INVALID_MESSAGE => ErrorKind::InvalidData,
-        STATUS_RESOURCE_EXHAUSTED => ErrorKind::ResourceBusy,
-        STATUS_FAULT => ErrorKind::Other,
-        STATUS_WOULD_BLOCK => ErrorKind::WouldBlock,
-        STATUS_BUFFER_TOO_SMALL => ErrorKind::InvalidInput,
-        STATUS_WAIT_TIMED_OUT => ErrorKind::TimedOut,
-        STATUS_OBJECT_REVOKED | STATUS_PEER_CLOSED => ErrorKind::BrokenPipe,
-        STATUS_NOT_SUPPORTED => ErrorKind::Unsupported,
-        STATUS_IO_ERROR => ErrorKind::Other,
-        _ => ErrorKind::Uncategorized,
-    }
+    kind_from_shim(errors::decode_kind(code))
 }
 
 pub fn error_string(code: RawOsError) -> String {
-    match code as u32 {
-        STATUS_INVALID_HANDLE => "invalid handle".to_owned(),
-        STATUS_WRONG_BINDING => "wrong handle binding".to_owned(),
-        STATUS_WRONG_SCOPE => "wrong capability scope".to_owned(),
-        STATUS_ACCESS_DENIED => "access denied".to_owned(),
-        STATUS_INVALID_ARGUMENT => "invalid argument".to_owned(),
-        STATUS_INVALID_MESSAGE => "invalid message".to_owned(),
-        STATUS_BUFFER_TOO_SMALL => "buffer too small".to_owned(),
-        STATUS_WOULD_BLOCK => "operation would block".to_owned(),
-        STATUS_WAIT_TIMED_OUT => "wait timed out".to_owned(),
-        STATUS_RESOURCE_EXHAUSTED => "resource exhausted".to_owned(),
-        STATUS_FAULT => "memory or capability fault".to_owned(),
-        STATUS_OBJECT_REVOKED => "object revoked".to_owned(),
-        STATUS_PEER_CLOSED => "peer closed".to_owned(),
-        STATUS_ALREADY_CONSUMED => "invocation already consumed".to_owned(),
-        STATUS_NOT_SUPPORTED => "operation not supported".to_owned(),
-        STATUS_IO_ERROR => "I/O error".to_owned(),
-        _ => "unknown NaOS status".to_owned(),
-    }
+    errors::describe(code).to_owned()
 }

@@ -51,6 +51,15 @@ impl SystemTime {
     pub const MAX: SystemTime = SystemTime(Duration::MAX);
     pub const MIN: SystemTime = SystemTime(Duration::ZERO);
 
+    /// Builds a timestamp from a stat-style split epoch time. Negative
+    /// seconds (pre-epoch) saturate at the epoch because this platform's
+    /// `SystemTime` is an unsigned offset from `UNIX_EPOCH`.
+    pub fn from_epoch(seconds: i64, nanoseconds: i64) -> SystemTime {
+        let seconds = if seconds < 0 { 0 } else { seconds as u64 };
+        let extra = if nanoseconds < 0 { 0 } else { nanoseconds as u64 };
+        SystemTime(Duration::from_secs(seconds).saturating_add(Duration::from_nanos(extra)))
+    }
+
     pub fn now() -> SystemTime {
         SystemTime(now(0))
     }

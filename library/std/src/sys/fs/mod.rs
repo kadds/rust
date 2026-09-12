@@ -46,8 +46,8 @@ cfg_select! {
         use vexos as imp;
     }
     target_os = "naos" => {
-        mod unsupported;
-        use unsupported as imp;
+        pub(crate) mod naos;
+        use naos as imp;
     }
     _ => {
         mod unsupported;

@@ -33,14 +33,21 @@ pub fn remove_dir_all(path: &Path) -> io::Result<()> {
 }
 
 fn remove_dir_all_recursive(path: &Path) -> io::Result<()> {
-    for child in fs::read_dir(path)? {
-        let result: io::Result<()> = try {
-            let child = child?;
-            if child.file_type()?.is_dir() {
-                remove_dir_all_recursive(&child.path())?;
-            } else {
-                fs::remove_file(&child.path())?;
-            }
+    // Snapshot the directory before mutating it. The NaOS Directory.list
+    // cursor is name-based; deleting entries while its ReadDir is alive can
+    // invalidate the cursor and surface EINVAL on the next page.
+    let children: io::Result<Vec<(PathBuf, bool)>> = fs::read_dir(path)?
+        .map(|entry| {
+            let entry = entry?;
+            let is_dir = entry.file_type()?.is_dir();
+            Ok((entry.path(), is_dir))
+        })
+        .collect();
+    for (child_path, is_dir) in children? {
+        let result: io::Result<()> = if is_dir {
+            remove_dir_all_recursive(&child_path)
+        } else {
+            fs::remove_file(&child_path)
         };
         // ignore internal NotFound errors to prevent race conditions
         if let Err(err) = &result

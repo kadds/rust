@@ -43,6 +43,10 @@ cfg_select! {
             pub use super::unsupported::{current_exe, SplitPaths, split_paths, JoinPathsError, join_paths, home_dir};
         }
     }
+    target_os = "naos" => {
+        mod naos;
+        use naos as imp;
+    }
     target_os = "windows" => {
         mod windows;
         use windows as imp;
