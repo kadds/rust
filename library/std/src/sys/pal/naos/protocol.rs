@@ -33,6 +33,10 @@ pub const HANDLE_INVALID: Handle = 0;
 
 // Frozen ABI constants (naos/include/naos/abi.h).
 pub const RESOURCE_MOVE: u32 = 1;
+pub const RESOURCE_DUPLICATE: u32 = 2;
+pub const MEMORY_MAP_READ: u32 = 1 << 0;
+pub const MEMORY_MAP_WRITE: u32 = 1 << 1;
+pub const MEMORY_MAP_SHARED: u32 = 1 << 3;
 
 /// Handle scopes (`NA_SCOPE_*`). Scope decides whether a descriptor binding
 /// is refcount-shared across dup() (File/Directory) or kernel-duplicated
@@ -45,7 +49,7 @@ pub const NA_DIRECTORY_LOOKUP_FLAG_NOFOLLOW: u64 = 1 << 0;
 pub const NA_DIRECTORY_OPEN_FLAG_CHROOT: u64 = 1 << 63;
 
 // Method ordinals -- generated constants, do not edit by hand.
-// File rev4 (`METHOD_*` / scope from File.abi.json, schema hash above).
+// File rev6 (`METHOD_*` / scope from idl/system/file.naidl).
 pub mod file_method {
     pub const PREAD: u64 = 1;
     pub const PWRITE: u64 = 2;
@@ -112,6 +116,9 @@ pub const MAX_MESSAGE_BYTES: usize = 65536;
 
 unsafe extern "C" {
     fn _na_handle_close(handle: Handle) -> RawStatus;
+    fn _na_memory_create(size: u64, flags: u64, result: *mut Handle) -> RawStatus;
+    fn _na_memory_map(frame: *mut MemoryMapFrame) -> RawStatus;
+    fn _na_memory_unmap(frame: *mut MemoryUnmapFrame) -> RawStatus;
     fn _na_handle_duplicate(source: Handle, rights: u64, result: *mut Handle) -> RawStatus;
     fn _na_handle_get_info(handle: Handle, result: *mut HandleInfo) -> RawStatus;
     fn _na_invoke_submit(
@@ -169,6 +176,32 @@ struct ResourceDisposition {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
+struct MemoryMapFrame {
+    struct_size: u32,
+    flags: u32,
+    hint: u64,
+    object: Handle,
+    offset: u64,
+    length: u64,
+    address: u64,
+    data_offset: u64,
+    reserved0: u64,
+    reserved1: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct MemoryUnmapFrame {
+    struct_size: u32,
+    flags: u32,
+    address: u64,
+    length: u64,
+    reserved0: u64,
+    reserved1: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
 struct HandleInfo {
     struct_size: u32,
     binding: u32,
@@ -181,7 +214,9 @@ struct HandleInfo {
     generation: u64,
     object_state: u64,
     protocol_uuid: [u8; 16],
-    capability_id: u64,
+    object_id: u64,
+    view_offset: u64,
+    view_length: u64,
 }
 
 /// Failure of one protocol round trip.
@@ -690,48 +725,128 @@ fn decode_stat(decoder: &mut Decoder) -> Result<Stat, CallError> {
     Ok(stat)
 }
 
+struct BulkRegion {
+    handle: Handle,
+    address: *mut u8,
+    length: usize,
+}
+
+impl BulkRegion {
+    fn new(length: usize) -> Result<Self, CallError> {
+        let length = length.max(1).checked_add(4095).ok_or(CallError::Codec("size"))? & !4095;
+        let mut handle = HANDLE_INVALID;
+        let status = unsafe { _na_memory_create(length as u64, 0, &mut handle) };
+        if status != status::OK || handle == HANDLE_INVALID {
+            return Err(CallError::Status(status));
+        }
+        let mut frame = MemoryMapFrame {
+            struct_size: core::mem::size_of::<MemoryMapFrame>() as u32,
+            flags: MEMORY_MAP_READ | MEMORY_MAP_WRITE | MEMORY_MAP_SHARED,
+            object: handle,
+            length: length as u64,
+            ..MemoryMapFrame::default()
+        };
+        let status = unsafe { _na_memory_map(&mut frame) };
+        if status != status::OK || frame.address == 0 {
+            unsafe { _na_handle_close(handle) };
+            return Err(CallError::Status(status));
+        }
+        Ok(Self { handle, address: frame.address as *mut u8, length })
+    }
+
+    fn resource(&self) -> ResourceDisposition {
+        ResourceDisposition {
+            handle: self.handle,
+            operation: RESOURCE_DUPLICATE,
+            ..ResourceDisposition::default()
+        }
+    }
+
+    fn write(&self, data: &[u8]) -> Result<(), CallError> {
+        if data.len() > self.length {
+            return Err(CallError::Codec("bulk overflow"));
+        }
+        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), self.address, data.len()) };
+        Ok(())
+    }
+
+    fn read(&self, data: &mut [u8]) -> Result<(), CallError> {
+        if data.len() > self.length {
+            return Err(CallError::Codec("bulk overflow"));
+        }
+        unsafe { core::ptr::copy_nonoverlapping(self.address, data.as_mut_ptr(), data.len()) };
+        Ok(())
+    }
+}
+
+impl Drop for BulkRegion {
+    fn drop(&mut self) {
+        let mut frame = MemoryUnmapFrame {
+            struct_size: core::mem::size_of::<MemoryUnmapFrame>() as u32,
+            address: self.address as u64,
+            length: self.length as u64,
+            ..MemoryUnmapFrame::default()
+        };
+        unsafe {
+            let _ = _na_memory_unmap(&mut frame);
+            let _ = _na_handle_close(self.handle);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
-// File operations (revision 4)
+// File operations (revision 6)
 // ---------------------------------------------------------------------------
 
 pub fn file_read(target: Handle, size: u64, buf: &mut [u8]) -> Result<usize, CallError> {
+    let size = usize::try_from(size).map_err(|_| CallError::Codec("size"))?;
+    if size > buf.len() {
+        return Err(CallError::Codec("read overflow"));
+    }
+    if size == 0 {
+        return Ok(0);
+    }
+    let region = BulkRegion::new(size)?;
+    let resource = region.resource();
     let completion = invoke(
         target,
         file_method::READ,
         |enc| {
-            enc.put_u64(size)?; // size @id(1)
+            enc.put_u64(size as u64)?; // size @id(1)
             enc.put_u64(0)?; // flags @id(2)
+            enc.put_u32(0)?; // buffer @id(3)
             Ok(())
         },
-        |dec| {
-            let data = dec.rest();
-            if data.len() > buf.len() {
-                return Err(CallError::Codec("read overflow"));
-            }
-            buf[..data.len()].copy_from_slice(data);
-            Ok(data.len())
-        },
-        None,
+        |dec| dec.get_u64(),
+        Some(core::slice::from_ref(&resource)),
         None,
     )?;
-    Ok(completion.value)
+    let count = usize::try_from(completion.value).map_err(|_| CallError::Codec("read count"))?;
+    if count > size {
+        return Err(CallError::Codec("read count"));
+    }
+    region.read(&mut buf[..count])?;
+    Ok(count)
 }
 
 pub fn file_write(target: Handle, data: &[u8]) -> Result<u64, CallError> {
-    if data.len() > MAX_MESSAGE_BYTES - 24 {
-        return Err(CallError::Codec("write too large"));
+    if data.is_empty() {
+        return Ok(0);
     }
+    let region = BulkRegion::new(data.len())?;
+    region.write(data)?;
+    let resource = region.resource();
     let completion = invoke(
         target,
         file_method::WRITE,
         |enc| {
             enc.put_u64(data.len() as u64)?; // size @id(1)
             enc.put_u64(0)?; // flags @id(2)
-            enc.put_raw(data)?; // data @id(3)
+            enc.put_u32(0)?; // buffer @id(3)
             Ok(())
         },
         |dec| dec.get_u64(),
-        None,
+        Some(core::slice::from_ref(&resource)),
         None,
     )?;
     Ok(completion.value)
