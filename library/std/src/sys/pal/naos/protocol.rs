@@ -181,6 +181,7 @@ struct MemoryMapFrame {
     flags: u32,
     hint: u64,
     object: Handle,
+    pager: Handle,
     offset: u64,
     length: u64,
     address: u64,
